@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "This is a tool designed to automate comment retrieval, filter entries based on specific criteria, and randomly select winners for giveaways."
 requires-python = ">=3.12"
 dependencies = [
+    "gradio>=6.2.0",
     "numpy==2.4.0",
     "pandas==2.3.3",
     "pillow==12.0.0",
