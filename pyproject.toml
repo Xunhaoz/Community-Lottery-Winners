@@ -1,0 +1,34 @@
+[project]
+name = "community-lottery-winners"
+version = "0.1.0"
+description = "This is a tool designed to automate comment retrieval, filter entries based on specific criteria, and randomly select winners for giveaways."
+requires-python = ">=3.12"
+dependencies = [
+    "numpy==2.4.0",
+    "pandas==2.3.3",
+    "pillow==12.0.0",
+    "pydantic==2.12.5",
+    "pydantic-core==2.41.5",
+    "pydub==0.25.1",
+    "pygments==2.19.2",
+    "python-dateutil==2.9.0.post0",
+    "python-multipart==0.0.21",
+    "pytz==2025.2",
+    "pyyaml==6.0.3",
+    "requests==2.32.5",
+    "rich==14.2.0",
+    "safehttpx==0.1.7",
+    "semantic-version==2.10.0",
+    "shellingham==1.5.4",
+    "six==1.17.0",
+    "starlette==0.50.0",
+    "tomlkit==0.13.3",
+    "tqdm==4.67.1",
+    "typer==0.21.0",
+    "typer-slim==0.21.0",
+    "typing-extensions==4.15.0",
+    "typing-inspection==0.4.2",
+    "tzdata==2025.3",
+    "urllib3==2.6.2",
+    "uvicorn==0.40.0",
+]
