@@ -1,0 +1,39 @@
+{
+  "manifest_version": 3,
+  "name": "Instagram Lottery Winner",
+  "version": "1.0.0",
+  "description": "This is a tool designed to automate comment retrieval, filter entries based on specific criteria, and randomly select winners for giveaways.",
+  "permissions": [
+    "activeTab",
+    "webRequest"
+  ],
+  "host_permissions": [
+    "https://www.instagram.com/*"
+  ],
+  "background": {
+    "service_worker": "modules/background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.instagram.com/*"],
+      "js": [
+        "modules/download-button.js",
+        "utils/dom-utils.js",
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["styles/modal.css"],
+      "matches": ["https://www.instagram.com/*"]
+    }
+  ],
+  "icons": {
+    "16": "icon/icon16.png",
+    "48": "icon/icon32.png",
+    "128": "icon/icon128.png"
+  }
+}
+
