@@ -1,6 +1,6 @@
 function processArticle(article) {
     const responseLabels = ['回應'];
-    const shareLabels = ['分享'];
+    const shareLabels = ['分享', '分享貼文'];
     const downloadCommentLabel = "Download Comments";
     const downloadCommentIconD = `M4 20h16M12 4v12l-5-5m10 0l-5 5`;
 
@@ -8,28 +8,48 @@ function processArticle(article) {
     const shareSVG = findSVGByAriaLabels(article, shareLabels);
 
     if (!responseSVG || !shareSVG) {
+        console.error("processArticle: Required SVGs not found");
         return;
     }
 
     const existingDownload = findSVGByAriaLabel(article, 'Download Comments');
     if (existingDownload) {
+        console.error("processArticle: Download Comments button already exists");
         return;
     }
 
-    let shareParent = shareSVG.parentElement;
+    let shareParent = null;
+    let current = shareSVG.parentElement;
+    while (current) {
+        if (current.tagName === 'SPAN') {
+            shareParent = current;
+            break;
+        }
+        current = current.parentElement;
+    }
+
     if (!shareParent) {
+        shareParent = shareSVG.parentElement;
+    }
+
+    if (!shareParent) {
+        console.error("processArticle: Share SVG has no parent element");
         return;
     }
 
     const clonedButton = shareParent.cloneNode(true);
 
-    const svg = clonedButton.querySelector('svg');
-    replaceSVG(svg, downloadCommentLabel, downloadCommentIconD);
+    const svgs = clonedButton.querySelectorAll('svg');
+    svgs.forEach(svg => {
+        replaceSVG(svg, downloadCommentLabel, downloadCommentIconD);
+    });
+
     
     // 添加點擊事件監聽器
     clonedButton.addEventListener('click', handleDownloadClick);
-    
     shareParent.parentNode.appendChild(clonedButton);
+
+    console.log("processArticle: Download Comments button added");
 }
 
 function observeArticles() {
@@ -60,13 +80,14 @@ function watchUrlChanges() {
     new MutationObserver(() => {
         const url = location.href;
         if (url !== lastUrl) {
+            console.log("URL changed:", url);
             lastUrl = url;
             setTimeout(() => {
                 const articles = document.querySelectorAll('article');
                 articles.forEach(article => {
                     processArticle(article);
                 });
-            }, 1000);
+            }, 5000);
         }
     }).observe(document, { subtree: true, childList: true });
 }
