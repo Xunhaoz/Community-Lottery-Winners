@@ -25,6 +25,7 @@ import {
 } from "../crawler/runner";
 import { findSource, isExtension, liveAdapter } from "../platform/client";
 import { store } from "../platform/db";
+import { exclusive } from "../platform/lock";
 import { demoData } from "./demo";
 import "./style.css";
 
@@ -37,20 +38,6 @@ const statusNames: Record<Activity["status"], string> = {
   complete: "擷取完成",
 };
 const empty: Evaluation = { decisions: [], tickets: [], eligibleAccounts: 0 };
-async function exclusive<T>(action: () => Promise<T>): Promise<T> {
-  return navigator.locks.request(
-    "community-lottery-writer",
-    { ifAvailable: true },
-    async (lock) => {
-      if (!lock)
-        throw new Error(
-          "另一個工作分頁正在處理資料。請回原分頁暫停或等待完成。",
-        );
-      return action();
-    },
-  );
-}
-
 function VirtualList<T>({
   items,
   render,
@@ -438,6 +425,14 @@ function App() {
             資料只留在這台電腦<small>免伺服器・不匯出登入資訊</small>
           </div>
         </div>
+        <a
+          className="maintenance-link"
+          href="update.html"
+          target="_blank"
+          rel="noreferrer"
+        >
+          資料維護 ↗
+        </a>
       </aside>
       <main>
         <header className="topbar">

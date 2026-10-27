@@ -1218,3 +1218,87 @@ h1 {
     gap: 15px;
   }
 }
+
+.editor-page .heading p {
+  max-width: 720px;
+  line-height: 1.6;
+}
+.editor-filters {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  gap: 16px;
+}
+.editor-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+  gap: 22px;
+}
+.editor-search {
+  width: 100%;
+  margin-bottom: 12px;
+}
+.editor-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 560px;
+  overflow-y: auto;
+}
+.editor-list button {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  text-align: left;
+  margin-bottom: 6px;
+}
+.editor-list button.chosen {
+  border-color: #96b284;
+  background: #f5f9f0;
+}
+.editor-list small,
+.section-title small {
+  color: var(--muted);
+  font-size: 11px;
+  word-break: break-all;
+}
+.editor-list span {
+  overflow-wrap: anywhere;
+}
+.editor-json {
+  width: 100%;
+  min-height: 520px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  resize: vertical;
+}
+.editor-winners {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 0 11px;
+  margin-bottom: 12px;
+}
+.editor-winners .mode-card span {
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+.editor-tickets {
+  width: 100%;
+  margin-bottom: 12px;
+}
+.maintenance-link {
+  display: block;
+  margin-top: 12px;
+  font-size: 12px;
+}
+@media (max-width: 900px) {
+  .editor-filters,
+  .editor-grid {
+    grid-template-columns: 1fr;
+  }
+}
