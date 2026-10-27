@@ -1,6 +1,12 @@
 import "fake-indexeddb/auto";
 import { describe, expect, it } from "vitest";
-import { database, editor, recordKey, store } from "../src/platform/db";
+import {
+  database,
+  editor,
+  isDrawRecord,
+  recordKey,
+  store,
+} from "../src/platform/db";
 import { newActivity } from "../src/crawler/runner";
 import { createDraw } from "../src/core/draw";
 import { evaluate } from "../src/core/rules";
@@ -123,5 +129,18 @@ describe("資料維護頁", () => {
     const saved = (await store.draws(draw.activityId))[0];
     expect(saved.winners[0]).toEqual(winner);
     expect(saved.winners[1]).toEqual(second);
+  });
+  it("缺欄位的抽獎紀錄不能替換，也不會被當成完整紀錄", async () => {
+    const { draw } = await seed();
+    expect(isDrawRecord(draw)).toBe(true);
+    // An evaluations record has a ticket pool but no rules or winners.
+    expect(isDrawRecord({ activityId: "a", evaluation: draw.evaluation })).toBe(
+      false,
+    );
+    expect(isDrawRecord({ ...draw, rules: undefined })).toBe(false);
+    await editor.put("draws", { id: "bare", activityId: draw.activityId });
+    await expect(
+      editor.replaceWinner("bare", 1, draw.evaluation.tickets[0].id),
+    ).rejects.toThrow("缺少");
   });
 });

@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import type { Activity, DrawRecord } from "../core/types";
 import {
   editor,
+  isDrawRecord,
   storeNames,
   type EditorRecord,
   type StoreName,
@@ -27,7 +28,7 @@ function summary(name: StoreName, v: Record<string, unknown>): string {
     return `@${v.username} · ${String(v.text ?? "").slice(0, 40)}`;
   if (name === "draws") {
     const d = v as unknown as DrawRecord;
-    return `${d.createdAt} · ${d.winners?.length ?? 0} 位得獎者`;
+    return `${d.createdAt ?? "（無建立時間）"} · ${d.winners?.length ?? 0} 位得獎者`;
   }
   return `判定 · ${String(v.at ?? "")}`;
 }
@@ -109,10 +110,12 @@ function App() {
       ? records.filter((r) => JSON.stringify(r.value).toLowerCase().includes(q))
       : records;
   }, [records, query]);
+  // Hand-edited or newly added draws may lack rules, pool or winners; only a complete one gets the replace panel.
   const draw =
-    name === "draws" && selected
-      ? (selected.value as unknown as DrawRecord)
+    name === "draws" && selected && isDrawRecord(selected.value)
+      ? selected.value
       : null;
+  const incompleteDraw = name === "draws" && selected !== null && !draw;
   const tickets = useMemo(() => {
     if (!draw) return [];
     const q = ticketQuery.trim().toLowerCase();
@@ -156,6 +159,8 @@ function App() {
             value={name}
             disabled={busy}
             onChange={(e) => {
+              // Drop the selection now: a record from the previous table must never render as this one.
+              choose(null);
               setName(e.target.value as StoreName);
               setQuery("");
             }}
@@ -172,7 +177,10 @@ function App() {
           <select
             value={activityId}
             disabled={busy || name === "activities"}
-            onChange={(e) => setActivityId(e.target.value)}
+            onChange={(e) => {
+              choose(null);
+              setActivityId(e.target.value);
+            }}
           >
             {activities.map((a) => (
               <option key={a.id} value={a.id}>
@@ -291,6 +299,12 @@ function App() {
           </div>
         </section>
       </div>
+      {incompleteDraw && (
+        <div role="status" className="alert">
+          這筆抽獎紀錄缺少 rules、evaluation.tickets 或
+          winners，無法使用「替換得獎者」。仍可在上方用 JSON 直接編輯。
+        </div>
+      )}
       {draw && (
         <section className="panel">
           <div className="section-title">

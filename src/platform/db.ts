@@ -131,6 +131,17 @@ export function recordKey(name: StoreName, value: unknown): IDBValidKey {
     throw new Error("抽獎紀錄需要非空字串的 activityId。");
   return v[field] as string;
 }
+// Only the fields the winner tools read; hand-edited records can drop any of them.
+export function isDrawRecord(value: unknown): value is DrawRecord {
+  const v = value as Partial<DrawRecord> | null;
+  return (
+    !!v &&
+    typeof v.rules === "object" &&
+    v.rules !== null &&
+    Array.isArray(v.winners) &&
+    Array.isArray(v.evaluation?.tickets)
+  );
+}
 const sameKey = (a: IDBValidKey, b: IDBValidKey) =>
   JSON.stringify(a) === JSON.stringify(b);
 // Direct, untracked edits for maintenance. Callers hold the writer lock.
@@ -174,6 +185,8 @@ export const editor = {
       tx = db.transaction("draws", "readwrite"),
       draw = await tx.store.get(drawId);
     if (!draw) throw new Error("找不到這筆抽獎紀錄。");
+    if (!isDrawRecord(draw))
+      throw new Error("這筆抽獎紀錄缺少 rules、籤池或得獎者，無法替換。");
     const index = draw.winners.findIndex((w) => w.position === position),
       ticket = draw.evaluation.tickets.find((t) => t.id === ticketId);
     if (index < 0) throw new Error(`找不到第 ${position} 位得獎者。`);
