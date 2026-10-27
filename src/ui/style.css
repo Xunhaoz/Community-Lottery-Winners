@@ -1302,3 +1302,25 @@ h1 {
     grid-template-columns: 1fr;
   }
 }
+
+.animation-stage {
+  width: min(1100px, 100%);
+  background: white;
+  border-radius: 15px;
+  padding: 16px;
+  box-shadow: 0 20px 70px #1a311333;
+}
+.animation-stage canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  border-radius: 10px;
+}
+.animation-stage .button-row {
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+.results-toolbar {
+  flex-wrap: wrap;
+}

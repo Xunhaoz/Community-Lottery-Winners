@@ -15,7 +15,12 @@ import {
   utcToTaipeiInput,
 } from "../core/rules";
 import { createDraw, drawProblem } from "../core/draw";
-import { commentsCsv, downloadCsv, winnersCsv } from "../core/csv";
+import {
+  commentsCsv,
+  downloadBlob,
+  downloadCsv,
+  winnersCsv,
+} from "../core/csv";
 import { parsePostUrl } from "../crawler/instagram";
 import {
   newActivity,
@@ -27,6 +32,7 @@ import { findSource, isExtension, liveAdapter } from "../platform/client";
 import { store } from "../platform/db";
 import { exclusive } from "../platform/lock";
 import { demoData } from "./demo";
+import { HEIGHT, WIDTH, play, recordAnimation } from "./drawAnimation";
 import "./style.css";
 
 const stages = ["擷取留言", "設定規則", "確認抽獎", "抽獎結果"];
@@ -38,6 +44,44 @@ const statusNames: Record<Activity["status"], string> = {
   complete: "擷取完成",
 };
 const empty: Evaluation = { decisions: [], tickets: [], eligibleAccounts: 0 };
+function DrawAnimation({
+  draw,
+  onDone,
+}: {
+  draw: DrawRecord;
+  onDone: () => void;
+}) {
+  const canvas = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    let live = true;
+    const run = play(canvas.current!, draw);
+    void run.done.then(() => {
+      if (live) setTimeout(() => live && onDone(), 800);
+    });
+    return () => {
+      live = false;
+      run.stop();
+    };
+  }, [draw.id]);
+  return (
+    <div className="modal-overlay">
+      <section
+        className="animation-stage"
+        role="dialog"
+        aria-modal="true"
+        aria-label="抽獎動畫"
+      >
+        <canvas ref={canvas} width={WIDTH} height={HEIGHT} />
+        <div className="button-row">
+          <button autoFocus onClick={onDone}>
+            略過動畫 →
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function VirtualList<T>({
   items,
   render,
@@ -88,7 +132,9 @@ function App() {
     [activity, setActivity] = useState<Activity | null>(null);
   const [comments, setComments] = useState<Comment[]>([]),
     [draws, setDraws] = useState<DrawRecord[]>([]),
-    [drawId, setDrawId] = useState("");
+    [drawId, setDrawId] = useState(""),
+    [playing, setPlaying] = useState<DrawRecord | null>(null),
+    [recording, setRecording] = useState<number | null>(null);
   const [step, setStep] = useState(0),
     [url, setUrl] = useState(""),
     [sourceId, setSourceId] = useState<number | null>(null);
@@ -1164,7 +1210,7 @@ function App() {
                           await store.saveDraw(draw);
                           setDraws(await store.draws(a.id));
                           setDrawId(draw.id);
-                          setStep(3);
+                          setPlaying(draw);
                         }),
                       )
                     }
@@ -1207,6 +1253,34 @@ function App() {
                 </button>
                 <button onClick={() => exportComments(selectedDraw)}>
                   ↓ 匯出當時留言及資格
+                </button>
+                <button
+                  disabled={recording !== null}
+                  onClick={() => setPlaying(selectedDraw)}
+                >
+                  ▶ 重播動畫
+                </button>
+                <button
+                  disabled={recording !== null}
+                  onClick={() =>
+                    void action(async () => {
+                      const draw = selectedDraw;
+                      setRecording(0);
+                      try {
+                        const video = await recordAnimation(draw, setRecording);
+                        downloadBlob(
+                          `${draw.demo ? "示範_" : ""}${draw.post.shortcode}_${draw.id}_抽獎動畫.${video.extension}`,
+                          video.blob,
+                        );
+                      } finally {
+                        setRecording(null);
+                      }
+                    })
+                  }
+                >
+                  {recording === null
+                    ? "↓ 下載抽獎動畫"
+                    : `產生影片中 ${Math.round(recording * 100)}%`}
                 </button>
               </div>
               <section className="panel winners-panel">
@@ -1302,6 +1376,15 @@ function App() {
           )}
         </div>
       </main>
+      {playing && (
+        <DrawAnimation
+          draw={playing}
+          onDone={() => {
+            setPlaying(null);
+            setStep(3);
+          }}
+        />
+      )}
       {detail && (
         <div className="modal-overlay" onClick={() => setDetail(null)}>
           <section

@@ -91,12 +91,13 @@ export function winnersCsv(draw: DrawRecord): string {
   ]);
 }
 export function downloadCsv(name: string, content: string): void {
-  const url = URL.createObjectURL(
-    new Blob([content], { type: "text/csv;charset=utf-8" }),
-  );
+  downloadBlob(name, new Blob([content], { type: "text/csv;charset=utf-8" }));
+}
+export function downloadBlob(name: string, blob: Blob): void {
+  const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
   a.download = name;
   a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
