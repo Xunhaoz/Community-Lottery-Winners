@@ -27,11 +27,35 @@ export function newActivity(post: Post, demo = false): Activity {
     ],
     pages: 0,
     commentCount: 0,
-    message: "已確認貼文，可以開始擷取。",
+    message:
+      post.reportedCount === undefined
+        ? "已確認貼文，可以開始擷取。"
+        : `已確認貼文，Instagram 顯示共 ${post.reportedCount.toLocaleString()} 則留言（含回覆），可以開始擷取。`,
     rules: { ...defaultRules },
     prizes: [{ id: crypto.randomUUID(), name: "幸運獎", quantity: 1 }],
     demo,
   };
+}
+// The live first-level count once capture has seen it, else the count read when connecting.
+export function reportedTotal(activity: Activity): number | undefined {
+  return (
+    activity.tasks.find((t) => t.parentId === null)?.expected ??
+    activity.post.reportedCount
+  );
+}
+// Flat capture has a single task, so task ratios stay at 0% until the end; use the total instead.
+export function progressPercent(activity: Activity): number {
+  if (activity.status === "complete") return 100;
+  const total = reportedTotal(activity),
+    hasReplies = activity.tasks.some((t) => t.parentId !== null);
+  if (total && !hasReplies)
+    return Math.min(99, Math.floor((activity.commentCount / total) * 100));
+  return activity.tasks.length
+    ? Math.round(
+        (activity.tasks.filter((t) => t.done).length / activity.tasks.length) *
+          100,
+      )
+    : 0;
 }
 export function applyPage(
   activity: Activity,
@@ -101,7 +125,7 @@ export function applyPage(
   a.message =
     a.status === "complete"
       ? "所有留言與回覆分頁已完成。"
-      : `已儲存 ${a.pages} 頁，${a.commentCount} 則留言與回覆。`;
+      : `已儲存 ${a.pages} 頁，${a.commentCount.toLocaleString()}${reportedTotal(a) === undefined ? "" : ` / ${reportedTotal(a)!.toLocaleString()}`} 則留言與回覆。`;
   return a;
 }
 export function wait(ms: number, signal?: AbortSignal): Promise<void> {

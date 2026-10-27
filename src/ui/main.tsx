@@ -17,7 +17,12 @@ import {
 import { createDraw, drawProblem } from "../core/draw";
 import { commentsCsv, downloadCsv, winnersCsv } from "../core/csv";
 import { parsePostUrl } from "../crawler/instagram";
-import { newActivity, runCapture } from "../crawler/runner";
+import {
+  newActivity,
+  progressPercent,
+  reportedTotal,
+  runCapture,
+} from "../crawler/runner";
 import { findSource, isExtension, liveAdapter } from "../platform/client";
 import { store } from "../platform/db";
 import { demoData } from "./demo";
@@ -556,14 +561,23 @@ function App() {
                   <div className="progress-track">
                     <span
                       style={{
-                        width: `${activity.tasks.length ? Math.round((activity.tasks.filter((t) => t.done).length / activity.tasks.length) * 100) : 0}%`,
+                        width: `${progressPercent(activity)}%`,
                       }}
                     />
                   </div>
                   <p role="status">{activity.message}</p>
                   <div className="capture-counts">
+                    {reportedTotal(activity) !== undefined && (
+                      <span>
+                        <strong>
+                          {reportedTotal(activity)!.toLocaleString()}
+                        </strong>{" "}
+                        IG 顯示總留言數
+                      </span>
+                    )}
                     <span>
-                      <strong>{activity.commentCount}</strong> 已保存留言
+                      <strong>{activity.commentCount.toLocaleString()}</strong>{" "}
+                      已保存留言
                     </span>
                     <span>
                       <strong>{activity.pages}</strong> 已保存頁數

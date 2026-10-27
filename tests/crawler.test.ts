@@ -3,6 +3,8 @@ import type { Activity, Comment, Page } from "../src/core/types";
 import {
   applyPage,
   newActivity,
+  progressPercent,
+  reportedTotal,
   runCapture,
   withRetry,
   type CrawlStore,
@@ -187,6 +189,21 @@ describe("爬蟲排程", () => {
     let a = applyPage(activity(), "comments", flat(["1"], "c1", 3));
     a = applyPage(a, "comments", flat(["2"], null, 2));
     expect(a.status).toBe("complete");
+  });
+  it("連接時即顯示 IG 總留言數，擷取中顯示進度比例", () => {
+    const a = newActivity({
+      shortcode: "ABC",
+      url: "https://www.instagram.com/p/ABC/",
+      reportedCount: 1578,
+    });
+    expect(a.message).toContain("共 1,578 則留言");
+    expect(reportedTotal(a)).toBe(1578);
+    expect(progressPercent(a)).toBe(0);
+    const next = applyPage(a, "comments", flat(["1", "2"], "c1", 4));
+    expect(next.message).toContain("2 / 4 則");
+    expect(reportedTotal(next)).toBe(4);
+    expect(progressPercent(next)).toBe(50);
+    expect(newActivity(activity().post).message).not.toContain("共");
   });
   it("平鋪查詢經 runCapture 走完全部分頁", async () => {
     const m = memoryStore(),
