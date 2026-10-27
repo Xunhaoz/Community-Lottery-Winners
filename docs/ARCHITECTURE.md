@@ -45,6 +45,14 @@ web 模式中，只有明確 `child_comment_count = 0` 可略過回覆請求。�
 
 工作頁關閉會釋放鎖。資料庫中殘留的 running 狀態，在重新開啟且成功取得鎖後轉為 paused。繼續時重讀資料庫最新狀態；目前尚未提交的一頁可重新抓取，由 ID 去重。取消保留資料但不能繼續；重新連接另建活動。
 
+## 抽獎動畫
+
+`src/ui/drawAnimation.ts` 以 1280×720 canvas 繪製。抽獎在動畫之前完成並以 `saveDraw` 寫入；動畫只讀取 `DrawRecord`，不使用、也不影響抽獎亂數。
+
+`animationPlan` 依得獎人數排定時間軸：開場 1.2 秒、每位 1.4 秒、結尾總覽 1.8 秒，總長限制在 5–10 秒，超過時壓縮每位的揭曉時間。滾動用的候選帳號取自該次籤池，以抽獎紀錄 ID 為種子的確定性亂數挑選，最後一格固定為真正的得獎者。`renderFrame` 是 `(draw, t)` 的純函式，因此現場播放、重播、事後下載的畫面一致，歷史紀錄也能重新產生。
+
+下載以 `canvas.captureStream(30)` 與 `MediaRecorder` 即時錄製，優先使用 `video/mp4`（H.264），不支援時改用 WebM。錄製期間在分頁可見時以 `requestAnimationFrame` 推進，隱藏時改用計時器避免停住。影片只在本機產生並經由 blob URL 下載，不上傳。
+
 ## IndexedDB
 
 資料庫 `community-lottery-v1`，schema 版本 1：
