@@ -613,12 +613,12 @@ function App() {
                         <strong>
                           {reportedTotal(activity)!.toLocaleString()}
                         </strong>{" "}
-                        IG 顯示總留言數
+                        IG 回報留言數
                       </span>
                     )}
                     <span>
                       <strong>{activity.commentCount.toLocaleString()}</strong>{" "}
-                      已保存留言
+                      實際取得留言數
                     </span>
                     <span>
                       <strong>{activity.pages}</strong> 已保存頁數

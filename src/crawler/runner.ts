@@ -72,7 +72,7 @@ export function applyPage(
     ids.add(c.id);
   });
   task.receivedIds = [...ids];
-  // Reply totals are lower bounds observed during this capture. A shrinking total must not hide missing data.
+  // Preserve observed reply totals for reference; they do not determine completion.
   // The flat first-level total is the post's live count, so the latest page wins (deletions may lower it).
   task.expected =
     task.parentId === null
@@ -102,29 +102,19 @@ export function applyPage(
   const cursorStuck =
     page.next !== null &&
     (page.next === task.cursor || task.seen.includes(page.next));
-  const missing =
-    page.next === null && task.receivedIds.length < (task.expected ?? 0);
-  if (cursorStuck || missing) {
+  if (cursorStuck) {
     a.status = "paused";
-    a.message = cursorStuck
-      ? "分頁游標重複，已保存本頁資料；擷取未完成。需檢查 adapter。"
-      : task.parentId === null
-        ? `留言數不足（${task.receivedIds.length}/${task.expected}），已保存資料；擷取未完成。繼續擷取會從第一頁重新核對，已保存留言不會重複。`
-        : `回覆數不足（${task.receivedIds.length}/${task.expected}），已保存資料；擷取未完成。`;
-    if (missing && task.parentId === null) {
-      // Comments posted mid-capture can land behind an opaque cursor; walk the whole list again and dedupe by ID.
-      task.cursor = null;
-      task.seen = [];
-    }
+    a.message = "分頁游標重複，已保存本頁資料；擷取未完成。需檢查 adapter。";
     return a;
   }
+  // API counts are informational. Only the pagination flags end a task.
   if (task.cursor) task.seen.push(task.cursor);
   task.cursor = page.next;
   task.done = page.next === null;
   a.status = a.tasks.every((t) => t.done) ? "complete" : "running";
   a.message =
     a.status === "complete"
-      ? "所有留言與回覆分頁已完成。"
+      ? `可取得的留言與回覆分頁已擷取完成，實際取得 ${a.commentCount.toLocaleString()} 則留言與回覆。`
       : `已儲存 ${a.pages} 頁，${a.commentCount.toLocaleString()}${reportedTotal(a) === undefined ? "" : ` / ${reportedTotal(a)!.toLocaleString()}`} 則留言與回覆。`;
   return a;
 }

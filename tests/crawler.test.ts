@@ -154,36 +154,74 @@ describe("爬蟲排程", () => {
     a = applyPage(a, "comments", page(["2"], "b"));
     expect(applyPage(a, "comments", page(["3"], "a")).status).toBe("paused");
   });
-  it("回覆數不足不能完成", () => {
+  it("回覆分頁結束即完成，回報數只供參考", () => {
     const p = page(["1"]);
     p.replyParents[0].expected = 3;
     const a = applyPage(activity(), "comments", p),
       stopped = applyPage(a, "reply:1", page(["11"], null, "1"));
-    expect(stopped.status).toBe("paused");
-    expect(stopped.message).toContain("回覆數不足");
+    expect(stopped.status).toBe("complete");
+    expect(stopped.commentCount).toBe(2);
+    expect(stopped.tasks[1].expected).toBe(3);
   });
   const flat = (ids: string[], next: string | null, expected: number) => ({
     ...page(ids, next),
     replyParents: [],
     expected,
   });
-  it("平鋪留言數達到 count 才完成，且不建立回覆工作", () => {
+  it("平鋪留言讀完分頁才完成，且不建立回覆工作", () => {
     let a = applyPage(activity(), "comments", flat(["1", "2"], "c1", 3));
     a = applyPage(a, "comments", flat(["3"], null, 3));
     expect(a.status).toBe("complete");
     expect(a.tasks).toHaveLength(1);
   });
-  it("平鋪留言數不足時暫停，續抓從第一頁重新核對", () => {
+  it("平鋪留言數不足但分頁結束即完成，保留原始回報數", () => {
     let a = applyPage(activity(), "comments", flat(["1", "2"], "c1", 4));
-    a = applyPage(a, "comments", flat(["3"], null, 4));
-    expect(a.status).toBe("paused");
-    expect(a.message).toContain("留言數不足（3/4）");
-    expect(a.tasks[0]).toMatchObject({ cursor: null, seen: [], done: false });
-    // A comment that landed behind the cursor shows up on the second pass.
-    a = applyPage(a, "comments", flat(["1", "4"], "c1", 4));
-    a = applyPage(a, "comments", flat(["3"], null, 4));
+    a = applyPage(a, "comments", flat(["2", "3"], null, 4));
     expect(a.status).toBe("complete");
-    expect(a.commentCount).toBe(4);
+    expect(a.commentCount).toBe(3);
+    expect(a.tasks[0]).toMatchObject({ cursor: null, done: true, expected: 4 });
+    expect(reportedTotal(a)).toBe(4);
+  });
+  it("count 已達標但仍有下一頁時不能提前完成", () => {
+    const a = applyPage(activity(), "comments", flat(["1"], "next", 1));
+    expect(a.status).toBe("running");
+    expect(a.tasks[0].done).toBe(false);
+  });
+  it("API 回報 1580 但只回傳 1579，has_next_page=false 即停止並保存實際數量", async () => {
+    const m = memoryStore();
+    const read = vi.fn(async () => ({
+      data: {
+        shortcode_media: {
+          edge_media_to_comment: {
+            count: 1580,
+            page_info: { has_next_page: false, end_cursor: null },
+            edges: Array.from({ length: 1579 }, (_, i) => ({
+              node: {
+                id: String(i + 1),
+                text: "hello",
+                created_at: 1,
+                owner: { id: "1", username: "user" },
+              },
+            })),
+          },
+        },
+      },
+    }));
+    const a = await runCapture({
+      activity: activity(),
+      adapter: createInstagramAdapter(read),
+      store: m.store,
+      signal: new AbortController().signal,
+      onUpdate: () => {},
+      sleep: noWait,
+    });
+    expect(read).toHaveBeenCalledTimes(1);
+    expect(a.status).toBe("complete");
+    expect(a.commentCount).toBe(1579);
+    expect(m.saved.commentCount).toBe(1579);
+    expect(m.raw.size).toBe(1579);
+    expect(reportedTotal(a)).toBe(1580);
+    expect(a.message).toContain("實際取得 1,579");
   });
   it("平鋪 count 以最新一頁為準，刪除留言不會卡住", () => {
     let a = applyPage(activity(), "comments", flat(["1"], "c1", 3));
@@ -523,7 +561,7 @@ describe("Instagram adapter", () => {
       cursor: "replyNext",
     });
   });
-  it("平鋪 edge_media_to_comment 不建立回覆工作，count 作為完整性目標", () => {
+  it("平鋪 edge_media_to_comment 不建立回覆工作，count 保留為回報數", () => {
     const p = parsePage({ ...connection, count: 1578 }, null, false);
     expect(p.replyParents).toEqual([]);
     expect(p.expected).toBe(1578);
