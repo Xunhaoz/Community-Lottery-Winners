@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Activity, Comment, Page } from "../src/core/types";
 import {
-  restartCapture,
   applyPage,
   newActivity,
   progressPercent,
@@ -21,7 +20,6 @@ import {
   webVariables,
   type InstagramAdapter,
 } from "../src/crawler/instagram";
-import { captureReady, createDraw } from "../src/core/draw";
 import { classifyResponse, CrawlError } from "../src/crawler/errors";
 
 const comment = (id: string, parentId: string | null = null): Comment => ({
@@ -156,14 +154,13 @@ describe("爬蟲排程", () => {
     a = applyPage(a, "comments", page(["2"], "b"));
     expect(applyPage(a, "comments", page(["3"], "a")).status).toBe("paused");
   });
-  it("回覆數不足標示差異，不自動重掃", () => {
+  it("回覆數不足不能完成", () => {
     const p = page(["1"]);
     p.replyParents[0].expected = 3;
     const a = applyPage(activity(), "comments", p),
       stopped = applyPage(a, "reply:1", page(["11"], null, "1"));
-    expect(stopped.status).toBe("discrepancy");
-    expect(stopped.tasks[1].done).toBe(true);
-    expect(stopped.message).toContain("不會自動重掃");
+    expect(stopped.status).toBe("paused");
+    expect(stopped.message).toContain("回覆數不足");
   });
   const flat = (ids: string[], next: string | null, expected: number) => ({
     ...page(ids, next),
@@ -176,207 +173,17 @@ describe("爬蟲排程", () => {
     expect(a.status).toBe("complete");
     expect(a.tasks).toHaveLength(1);
   });
-  it("平鋪留言數不足即停止，手動重啟才能核對", () => {
+  it("平鋪留言數不足時暫停，續抓從第一頁重新核對", () => {
     let a = applyPage(activity(), "comments", flat(["1", "2"], "c1", 4));
     a = applyPage(a, "comments", flat(["3"], null, 4));
-    expect(a.status).toBe("discrepancy");
-    expect(a.tasks[0].done).toBe(true);
-    a = restartCapture(a);
+    expect(a.status).toBe("paused");
+    expect(a.message).toContain("留言數不足（3/4）");
+    expect(a.tasks[0]).toMatchObject({ cursor: null, seen: [], done: false });
     // A comment that landed behind the cursor shows up on the second pass.
     a = applyPage(a, "comments", flat(["1", "4"], "c1", 4));
     a = applyPage(a, "comments", flat(["3"], null, 4));
     expect(a.status).toBe("complete");
     expect(a.commentCount).toBe(4);
-  });
-  it("1580/1579 只讀一輪即停止，差異保持未完成且不能抽獎", async () => {
-    const m = memoryStore();
-    const ids = Array.from({ length: 1579 }, (_, i) => String(i + 1));
-    const read = vi.fn(async (_: string, cursor: string | null) => {
-      const offset = Number(cursor ?? 0);
-      return flat(
-        ids.slice(offset, offset + 50),
-        offset + 50 < ids.length ? String(offset + 50) : null,
-        1580,
-      );
-    });
-    const a = await runCapture({
-      activity: activity(),
-      adapter: adapter(read),
-      store: m.store,
-      signal: new AbortController().signal,
-      onUpdate: () => {},
-      sleep: noWait,
-    });
-    expect(read).toHaveBeenCalledTimes(32);
-    expect(a.status).toBe("discrepancy");
-    expect(a.commentCount).toBe(1579);
-    expect(m.raw.size).toBe(1579);
-    expect(a.tasks[0]).toMatchObject({
-      done: true,
-      countMismatch: true,
-    });
-    expect(captureReady(a)).toBe(false);
-    expect(() => createDraw(a, [...m.raw.values()])).toThrow();
-    const restarted = restartCapture(a);
-    expect(restarted.commentCount).toBe(1579);
-    expect(restarted.tasks[0]).toMatchObject({
-      done: false,
-      cursor: null,
-      rechecks: 0,
-    });
-  });
-  it.each([null, "stale-cursor"])(
-    "實際 API has_next_page=false 即停止，即使 count 不足且 end_cursor=%s",
-    async (endCursor) => {
-      const m = memoryStore();
-      const read = vi.fn(async () => ({
-        data: {
-          shortcode_media: {
-            edge_media_to_comment: {
-              count: 1580,
-              page_info: { has_next_page: false, end_cursor: endCursor },
-              edges: Array.from({ length: 1579 }, (_, i) => ({
-                node: {
-                  id: String(i + 1),
-                  text: "hello",
-                  created_at: 1,
-                  owner: { id: "1", username: "user" },
-                },
-              })),
-            },
-          },
-        },
-      }));
-      const a = await runCapture({
-        activity: activity(),
-        adapter: createInstagramAdapter(read),
-        store: m.store,
-        signal: new AbortController().signal,
-        onUpdate: () => {},
-        sleep: noWait,
-      });
-      expect(read).toHaveBeenCalledTimes(1);
-      expect(a.commentCount).toBe(1579);
-      expect(a.tasks[0]).toMatchObject({
-        done: true,
-        cursor: null,
-        countMismatch: true,
-      });
-      expect(a.status).toBe("discrepancy");
-    },
-  );
-  it("數量已達 count，但 has_next_page=true 仍繼續下一頁", async () => {
-    const m = memoryStore();
-    const read = vi.fn(async (request) => ({
-      data: {
-        shortcode_media: {
-          edge_media_to_comment: {
-            count: 1,
-            page_info: {
-              has_next_page: !request.cursor,
-              end_cursor: request.cursor ? null : "next",
-            },
-            edges: request.cursor
-              ? []
-              : [
-                  {
-                    node: {
-                      id: "1",
-                      text: "hello",
-                      created_at: 1,
-                      owner: { id: "1", username: "user" },
-                    },
-                  },
-                ],
-          },
-        },
-      },
-    }));
-    const a = await runCapture({
-      activity: activity(),
-      adapter: createInstagramAdapter(read),
-      store: m.store,
-      signal: new AbortController().signal,
-      onUpdate: () => {},
-      sleep: noWait,
-    });
-    expect(read).toHaveBeenCalledTimes(2);
-    expect(read.mock.calls[1][0].cursor).toBe("next");
-    expect(a.status).toBe("complete");
-  });
-  it("重新核對找到漏掉的 ID 後正常完成", async () => {
-    const m = memoryStore();
-    let calls = 0;
-    let a = await runCapture({
-      activity: activity(),
-      adapter: adapter(async () =>
-        flat(++calls === 1 ? ["1"] : ["1", "2"], null, 2),
-      ),
-      store: m.store,
-      signal: new AbortController().signal,
-      onUpdate: () => {},
-      sleep: noWait,
-    });
-    expect(calls).toBe(1);
-    expect(a.status).toBe("discrepancy");
-    a = await runCapture({
-      activity: restartCapture(a),
-      adapter: adapter(async () => {
-        calls++;
-        return flat(["1", "2"], null, 2);
-      }),
-      store: m.store,
-      signal: new AbortController().signal,
-      onUpdate: () => {},
-      sleep: noWait,
-    });
-    expect(calls).toBe(2);
-    expect(a.status).toBe("complete");
-    expect(a.commentCount).toBe(2);
-  });
-  it("回覆數不足仍讀取其他回覆串，不重掃", async () => {
-    const m = memoryStore();
-    const top = page(["1", "2"]);
-    top.replyParents.forEach((p) => (p.expected = 2));
-    const replies = vi.fn(async (_: string, parent: string) =>
-      page(parent === "1" ? ["11"] : ["21", "22"], null, parent),
-    );
-    const a = await runCapture({
-      activity: activity(),
-      adapter: adapter(async () => top, replies),
-      store: m.store,
-      signal: new AbortController().signal,
-      onUpdate: () => {},
-      sleep: noWait,
-    });
-    expect(replies).toHaveBeenCalledTimes(2);
-    expect(a.status).toBe("discrepancy");
-    expect(a.tasks.every((t) => t.done)).toBe(true);
-    expect(a.commentCount).toBe(5);
-  });
-  it("舊版補抓進度續抓直接停止；取消活動可明確重啟", async () => {
-    const m = memoryStore();
-    let a = applyPage(activity(), "comments", flat(["1"], null, 2));
-    a.status = "paused";
-    a.tasks[0].done = false;
-    a.tasks[0].rechecks = 1;
-    const read = vi.fn(async () => flat(["1"], null, 2));
-    a = await runCapture({
-      activity: a,
-      adapter: adapter(read),
-      store: m.store,
-      signal: new AbortController().signal,
-      onUpdate: () => {},
-      sleep: noWait,
-    });
-    expect(read).not.toHaveBeenCalled();
-    expect(a.status).toBe("discrepancy");
-    a.status = "cancelled";
-    expect(captureReady(a)).toBe(false);
-    const retry = restartCapture(a);
-    expect(retry.status).toBe("ready");
-    expect(retry.tasks[0].receivedIds).toEqual(["1"]);
-    expect(captureReady(retry)).toBe(false);
   });
   it("平鋪 count 以最新一頁為準，刪除留言不會卡住", () => {
     let a = applyPage(activity(), "comments", flat(["1"], "c1", 3));

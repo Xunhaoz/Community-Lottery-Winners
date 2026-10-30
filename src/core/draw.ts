@@ -86,18 +86,11 @@ export function selectWinners(
     }
   return winners;
 }
-export function captureReady(activity: Activity): boolean {
-  return (
-    activity.tasks.length > 0 &&
-    activity.tasks.every((t) => t.done) &&
-    activity.status === "complete"
-  );
-}
 export function createDraw(
   activity: Activity,
   comments: Comment[],
 ): DrawRecord {
-  if (!captureReady(activity))
+  if (activity.status !== "complete" || activity.tasks.some((t) => !t.done))
     throw new Error("留言及回覆尚未全部擷取完成，不能正式抽獎。");
   const evaluation = evaluate(comments, activity.rules);
   const problem = drawProblem(evaluation, activity.rules, activity.prizes);

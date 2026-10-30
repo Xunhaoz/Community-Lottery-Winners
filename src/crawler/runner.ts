@@ -104,40 +104,28 @@ export function applyPage(
     (page.next === task.cursor || task.seen.includes(page.next));
   const missing =
     page.next === null && task.receivedIds.length < (task.expected ?? 0);
-  if (cursorStuck) {
+  if (cursorStuck || missing) {
     a.status = "paused";
-    a.message = "分頁游標重複，已保存本頁資料；擷取未完成。需檢查 adapter。";
+    a.message = cursorStuck
+      ? "分頁游標重複，已保存本頁資料；擷取未完成。需檢查 adapter。"
+      : task.parentId === null
+        ? `留言數不足（${task.receivedIds.length}/${task.expected}），已保存資料；擷取未完成。繼續擷取會從第一頁重新核對，已保存留言不會重複。`
+        : `回覆數不足（${task.receivedIds.length}/${task.expected}），已保存資料；擷取未完成。`;
+    if (missing && task.parentId === null) {
+      // Comments posted mid-capture can land behind an opaque cursor; walk the whole list again and dedupe by ID.
+      task.cursor = null;
+      task.seen = [];
+    }
     return a;
   }
-  task.countMismatch = missing;
   if (task.cursor) task.seen.push(task.cursor);
   task.cursor = page.next;
   task.done = page.next === null;
-  a.status = a.tasks.every((t) => t.done)
-    ? a.tasks.some((t) => t.countMismatch)
-      ? "discrepancy"
-      : "complete"
-    : "running";
+  a.status = a.tasks.every((t) => t.done) ? "complete" : "running";
   a.message =
-    a.status === "discrepancy"
-      ? "可取得分頁已讀完，但留言數仍不符；已停止擷取，不會自動重掃。可稍後手動重新核對。"
-      : a.status === "complete"
-        ? "所有留言與回覆分頁已完成。"
-        : `已儲存 ${a.pages} 頁，${a.commentCount.toLocaleString()}${reportedTotal(a) === undefined ? "" : ` / ${reportedTotal(a)!.toLocaleString()}`} 則留言與回覆。`;
-  return a;
-}
-export function restartCapture(activity: Activity): Activity {
-  const a = structuredClone(activity);
-  a.status = "ready";
-  a.message = "將從第一頁重新核對，保留已保存留言。";
-  a.updatedAt = new Date().toISOString();
-  for (const task of a.tasks) {
-    task.cursor = null;
-    task.seen = [];
-    task.done = false;
-    task.rechecks = 0;
-    task.countMismatch = false;
-  }
+    a.status === "complete"
+      ? "所有留言與回覆分頁已完成。"
+      : `已儲存 ${a.pages} 頁，${a.commentCount.toLocaleString()}${reportedTotal(a) === undefined ? "" : ` / ${reportedTotal(a)!.toLocaleString()}`} 則留言與回覆。`;
   return a;
 }
 export function wait(ms: number, signal?: AbortSignal): Promise<void> {
@@ -186,32 +174,7 @@ export async function runCapture(options: {
   const { adapter, store, signal, onUpdate } = options,
     sleep = options.sleep ?? wait;
   let a = structuredClone(options.activity);
-  if (
-    a.status === "complete" ||
-    a.status === "cancelled" ||
-    a.status === "discrepancy"
-  )
-    return a;
-  // Retire automatic rechecks saved by the previous release without fetching them again.
-  for (const task of a.tasks) {
-    if (!task.done && (task.rechecks ?? 0) > 0) {
-      task.done = true;
-      task.cursor = null;
-      task.countMismatch = task.receivedIds.length < (task.expected ?? 0);
-    }
-  }
-  if (a.tasks.length && a.tasks.every((t) => t.done)) {
-    a.status = a.tasks.some((t) => t.countMismatch)
-      ? "discrepancy"
-      : "complete";
-    a.message =
-      a.status === "discrepancy"
-        ? "先前已讀完可取得分頁，已停止舊版自動補抓。留言數仍不符，可稍後手動重新核對。"
-        : "所有留言與回覆分頁已完成。";
-    await store.saveActivity(a);
-    onUpdate(a);
-    return a;
-  }
+  if (a.status === "complete" || a.status === "cancelled") return a;
   a.status = "running";
   a.message = "正在擷取；每頁完成後自動儲存。";
   await store.saveActivity(a);

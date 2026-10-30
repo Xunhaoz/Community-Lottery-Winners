@@ -78,16 +78,13 @@ export interface CrawlTask {
   done: boolean;
   receivedIds: string[];
   expected?: number;
-  rechecks?: number;
-  countMismatch?: boolean;
 }
 export interface Activity {
   id: string;
   post: Post;
   createdAt: string;
   updatedAt: string;
-  status:
-    "ready" | "running" | "paused" | "cancelled" | "complete" | "discrepancy";
+  status: "ready" | "running" | "paused" | "cancelled" | "complete";
   tasks: CrawlTask[];
   pages: number;
   commentCount: number;

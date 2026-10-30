@@ -149,8 +149,7 @@ export function parsePage(
   if (!Array.isArray(edge.edges) || typeof info.has_next_page !== "boolean")
     throw new CrawlError("schema", "缺少留言分頁資訊，不能視為擷取完成。");
   let next: string | null = null;
-  // The explicit pagination flag is authoritative, not count or end_cursor alone.
-  if (info.has_next_page === true) {
+  if (info.has_next_page) {
     if (typeof info.end_cursor !== "string" || !info.end_cursor)
       throw new CrawlError("cursor", "下一頁游標缺失，擷取未完成。");
     next = info.end_cursor;
