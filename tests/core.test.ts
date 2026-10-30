@@ -30,6 +30,25 @@ describe("資格與籤數", () => {
       parseTags("@A @a @OWNER，@b.c！ mail@user.com /@url @D", "Owner"),
     ).toEqual(["a", "b.c", "d"]);
   });
+  it.each(["person", "friends"] as const)(
+    "%s 模式可切換自己是否計入 Tag，且不分大小寫",
+    (mode) => {
+      const comments = [
+        c("1", "@Me @friend", { username: "me" }),
+        c("2", "@me @other", { username: "me" }),
+      ];
+      const rules = { ...defaultRules, mode, minTags: 2 };
+      const excluded = evaluate(comments, rules);
+      expect(excluded.tickets).toHaveLength(0);
+      expect(excluded.decisions[0].tags).toEqual(["friend"]);
+      const allowed = evaluate(comments, { ...rules, excludeSelfTags: false });
+      expect(allowed.tickets).toHaveLength(1);
+      expect(allowed.decisions[0].tags).toEqual(["me", "friend"]);
+      expect(
+        evaluate(comments, { ...rules, excludeSelfTags: undefined }).tickets,
+      ).toHaveLength(0);
+    },
+  );
   it("只從本文取得 Tag，不從回覆對象或其他欄位推測", () =>
     expect(
       evaluate([c("1", "沒有標註", { parentId: "200" })], weighted).tickets,

@@ -16,6 +16,7 @@ export interface Post {
 export interface Rules {
   text: string;
   minTags: number;
+  excludeSelfTags?: boolean;
   deadline: string | null;
   mode: "person" | "friends";
   repeatWinners: boolean;
@@ -96,6 +97,7 @@ export interface Activity {
 export const defaultRules: Rules = {
   text: "",
   minTags: 0,
+  excludeSelfTags: true,
   deadline: null,
   mode: "person",
   repeatWinners: false,

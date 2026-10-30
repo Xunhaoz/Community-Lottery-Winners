@@ -12,7 +12,11 @@ export function validateRules(rules: Rules): void {
     throw new Error("截止時間無效。");
 }
 
-export function parseTags(text: string, username: string): string[] {
+export function parseTags(
+  text: string,
+  username: string,
+  excludeSelf = true,
+): string[] {
   // Exclude email/URL fragments; accept punctuation between real mentions.
   const tags = [
     ...text.matchAll(
@@ -20,7 +24,10 @@ export function parseTags(text: string, username: string): string[] {
     ),
   ]
     .map((m) => m[1].toLowerCase())
-    .filter((tag) => !tag.includes("..") && tag !== username.toLowerCase());
+    .filter(
+      (tag) =>
+        !tag.includes("..") && (!excludeSelf || tag !== username.toLowerCase()),
+    );
   return [...new Set(tags)];
 }
 
@@ -40,7 +47,7 @@ export function evaluate(comments: Comment[], rules: Rules): Evaluation {
     ticketed = new Set<string>();
   const unique = new Map(comments.map((c) => [c.id, c]));
   for (const c of [...unique.values()].sort(compareComments)) {
-    const tags = parseTags(c.text, c.username),
+    const tags = parseTags(c.text, c.username, rules.excludeSelfTags ?? true),
       consumed = used.get(c.authorId) ?? new Set<string>();
     const newTags = tags.filter((t) => !consumed.has(t));
     const failures: string[] = [];

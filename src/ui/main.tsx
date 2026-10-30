@@ -830,8 +830,20 @@ function App() {
                       />
                     </label>
                   </div>
+                  <label className="checkbox">
+                    <input
+                      type="checkbox"
+                      disabled={busy}
+                      checked={activity.rules.excludeSelfTags ?? true}
+                      onChange={(e) =>
+                        updateRules({ excludeSelfTags: e.target.checked })
+                      }
+                    />
+                    標註對象不可為自己
+                  </label>
                   <p className="helper">
-                    重複 Tag 只計一次，不計自己；截止當下的留言也納入。
+                    勾選時，標註自己不計入有效 Tag；其他標註仍正常計算。重複 Tag
+                    只計一次，截止當下的留言也納入。
                   </p>
                   {(deadlineError || result.error) && (
                     <p role="alert" className="field-error">
@@ -1158,6 +1170,12 @@ function App() {
                     </strong>
                   </div>
                   <div>
+                    <span>標註對象不可為自己</span>
+                    <strong>
+                      {(activity.rules.excludeSelfTags ?? true) ? "是" : "否"}
+                    </strong>
+                  </div>
+                  <div>
                     <span>指定文字 / Tag 人數</span>
                     <strong>
                       {activity.rules.text || "不限文字"} /{" "}
@@ -1335,7 +1353,10 @@ function App() {
                   {selectedDraw.rules.mode === "person"
                     ? "每人一次機會"
                     : "Tag 新朋友增加機會"}{" "}
-                  · 最少 Tag {selectedDraw.rules.minTags} 人
+                  · 最少 Tag {selectedDraw.rules.minTags} 人 ·{" "}
+                  {(selectedDraw.rules.excludeSelfTags ?? true)
+                    ? "標註自己不計數"
+                    : "標註自己可計數"}
                 </p>
                 <p>
                   指定文字：{selectedDraw.rules.text || "不限"} · 截止時間：
