@@ -14,7 +14,7 @@ import {
   taipeiToUtc,
   utcToTaipeiInput,
 } from "../core/rules";
-import { createDraw, drawProblem } from "../core/draw";
+import { captureReady, createDraw, drawProblem } from "../core/draw";
 import {
   commentsCsv,
   downloadBlob,
@@ -23,6 +23,7 @@ import {
 } from "../core/csv";
 import { parsePostUrl } from "../crawler/instagram";
 import {
+  restartCapture,
   newActivity,
   progressPercent,
   reportedTotal,
@@ -42,6 +43,7 @@ const statusNames: Record<Activity["status"], string> = {
   paused: "已暫停 · 未完成",
   cancelled: "已取消 · 未完成",
   complete: "擷取完成",
+  discrepancy: "分頁已讀完 · 數量不符",
 };
 const empty: Evaluation = { decisions: [], tickets: [], eligibleAccounts: 0 };
 function DrawAnimation({
@@ -214,7 +216,7 @@ function App() {
     setComments(await store.comments(a.id));
     setDraws(await store.draws(a.id));
     setDrawId("");
-    setStep(a.status === "complete" ? 1 : 0);
+    setStep(captureReady(a) ? 1 : 0);
     setQuery("");
     setFilter("all");
     setError("");
@@ -340,9 +342,9 @@ function App() {
     if (!activity) return;
     const id = activity.id;
     await exclusive(async () => {
-      const current = await store.getActivity(id);
+      let current = await store.getActivity(id);
       if (!current) throw new Error("找不到活動。");
-      if (current.status === "complete" || current.status === "cancelled") {
+      if (current.status === "complete") {
         await load(current);
         return;
       }
@@ -350,6 +352,9 @@ function App() {
         source = sources.find((s) => s.id === sourceId) ?? sources[0];
       if (!source)
         throw new Error("來源分頁已關閉或切換，請開啟原貼文再續抓。");
+      if (["cancelled", "discrepancy"].includes(current.status)) {
+        current = restartCapture(current);
+      }
       setSourceId(source.id);
       controller.current = new AbortController();
       try {
@@ -384,7 +389,7 @@ function App() {
       setStep(next);
       return;
     }
-    if (next > 0 && activity.status !== "complete")
+    if (next > 0 && !captureReady(activity))
       throw new Error("需完成所有留言及回覆擷取後，才能設定並確認正式抽獎。");
     if (deadlineError || result.error)
       throw new Error(deadlineError || result.error);
@@ -410,7 +415,7 @@ function App() {
               disabled={
                 busy ||
                 (i > 0 && !activity) ||
-                (i > 0 && activity?.status !== "complete") ||
+                (i > 0 && (!activity || !captureReady(activity))) ||
                 (i === 3 && !draws.length)
               }
               onClick={() => void action(() => go(i))}
@@ -502,6 +507,13 @@ function App() {
           {activity?.demo && (
             <div className="demo-banner">
               示範活動 · 所有帳號與留言均為測試資料
+            </div>
+          )}
+          {activity?.status === "discrepancy" && (
+            <div className="alert" role="status">
+              留言數量不符，完整性尚未確認。IG 回報{" "}
+              {reportedTotal(activity)?.toLocaleString() ?? "未知"} 則，已保存{" "}
+              {activity.commentCount.toLocaleString()} 則。 請稍後手動重新核對。
             </div>
           )}
           <div className="heading">
@@ -613,7 +625,7 @@ function App() {
                         <strong>
                           {reportedTotal(activity)!.toLocaleString()}
                         </strong>{" "}
-                        IG 顯示總留言數
+                        IG 回報留言數
                       </span>
                     )}
                     <span>
@@ -643,12 +655,17 @@ function App() {
                         className="primary"
                         disabled={
                           busy ||
-                          ["complete", "cancelled"].includes(activity.status) ||
+                          activity.status === "complete" ||
                           activity.demo
                         }
                         onClick={() => void action(capture)}
                       >
-                        {activity.pages ? "繼續擷取" : "開始擷取"} →
+                        {["cancelled", "discrepancy"].includes(activity.status)
+                          ? "重新核對已保存留言"
+                          : activity.pages
+                            ? "繼續擷取"
+                            : "開始擷取"}{" "}
+                        →
                       </button>
                     )}
                     <button
@@ -666,8 +683,7 @@ function App() {
                             const a: Activity = {
                               ...current,
                               status: "cancelled",
-                              message:
-                                "已取消擷取，保留現有留言。若要重新擷取，請重新連接建立新活動。",
+                              message: `已取消擷取，保留現有留言。可按「重新核對已保存留言」重試。取消前：${current.message}`,
                             };
                             await store.saveActivity(a);
                             setActivity(a);
@@ -688,7 +704,7 @@ function App() {
                     </button>
                     <button
                       className="primary push-right"
-                      disabled={busy || activity.status !== "complete"}
+                      disabled={busy || !captureReady(activity)}
                       onClick={() => void action(() => go(1))}
                     >
                       設定抽獎規則 →
