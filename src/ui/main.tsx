@@ -45,6 +45,8 @@ const statusNames: Record<Activity["status"], string> = {
   complete: "擷取完成",
   discrepancy: "分頁已讀完 · 數量不符",
 };
+const canConfigureRules = (activity: Activity) =>
+  activity.status === "cancelled" || captureReady(activity);
 const empty: Evaluation = { decisions: [], tickets: [], eligibleAccounts: 0 };
 function DrawAnimation({
   draw,
@@ -216,7 +218,7 @@ function App() {
     setComments(await store.comments(a.id));
     setDraws(await store.draws(a.id));
     setDrawId("");
-    setStep(captureReady(a) ? 1 : 0);
+    setStep(canConfigureRules(a) ? 1 : 0);
     setQuery("");
     setFilter("all");
     setError("");
@@ -389,8 +391,10 @@ function App() {
       setStep(next);
       return;
     }
-    if (next > 0 && !captureReady(activity))
-      throw new Error("需完成所有留言及回覆擷取後，才能設定並確認正式抽獎。");
+    if (next === 1 && !canConfigureRules(activity))
+      throw new Error("請先完成或取消擷取，再設定規則。");
+    if (next > 1 && !captureReady(activity))
+      throw new Error("需完成所有留言及回覆擷取後，才能確認正式抽獎。");
     if (deadlineError || result.error)
       throw new Error(deadlineError || result.error);
     await exclusive(saveDraft);
@@ -415,7 +419,8 @@ function App() {
               disabled={
                 busy ||
                 (i > 0 && !activity) ||
-                (i > 0 && (!activity || !captureReady(activity))) ||
+                (i === 1 && (!activity || !canConfigureRules(activity))) ||
+                (i > 1 && (!activity || !captureReady(activity))) ||
                 (i === 3 && !draws.length)
               }
               onClick={() => void action(() => go(i))}
@@ -514,6 +519,11 @@ function App() {
               留言數量不符，完整性尚未確認。IG 回報{" "}
               {reportedTotal(activity)?.toLocaleString() ?? "未知"} 則，已保存{" "}
               {activity.commentCount.toLocaleString()} 則。 請稍後手動重新核對。
+            </div>
+          )}
+          {activity?.status === "cancelled" && step === 1 && (
+            <div className="alert" role="status">
+              擷取已取消，可使用已保存留言設定規則及查看資格；完成擷取後才能確認正式抽獎。
             </div>
           )}
           <div className="heading">
@@ -704,7 +714,7 @@ function App() {
                     </button>
                     <button
                       className="primary push-right"
-                      disabled={busy || !captureReady(activity)}
+                      disabled={busy || !canConfigureRules(activity)}
                       onClick={() => void action(() => go(1))}
                     >
                       設定抽獎規則 →
@@ -1134,9 +1144,20 @@ function App() {
                 <button
                   className="primary"
                   disabled={busy || Boolean(problem)}
-                  onClick={() => void action(() => go(2))}
+                  onClick={() =>
+                    void action(async () => {
+                      if (activity.status === "cancelled") {
+                        await exclusive(saveDraft);
+                        setNotice("規則已儲存。");
+                        return;
+                      }
+                      await go(2);
+                    })
+                  }
                 >
-                  儲存規則，確認抽獎 →
+                  {activity.status === "cancelled"
+                    ? "儲存規則"
+                    : "儲存規則，確認抽獎 →"}
                 </button>
               </div>
             </>

@@ -225,6 +225,85 @@ describe("爬蟲排程", () => {
       rechecks: 0,
     });
   });
+  it.each([null, "stale-cursor"])(
+    "實際 API has_next_page=false 即停止，即使 count 不足且 end_cursor=%s",
+    async (endCursor) => {
+      const m = memoryStore();
+      const read = vi.fn(async () => ({
+        data: {
+          shortcode_media: {
+            edge_media_to_comment: {
+              count: 1580,
+              page_info: { has_next_page: false, end_cursor: endCursor },
+              edges: Array.from({ length: 1579 }, (_, i) => ({
+                node: {
+                  id: String(i + 1),
+                  text: "hello",
+                  created_at: 1,
+                  owner: { id: "1", username: "user" },
+                },
+              })),
+            },
+          },
+        },
+      }));
+      const a = await runCapture({
+        activity: activity(),
+        adapter: createInstagramAdapter(read),
+        store: m.store,
+        signal: new AbortController().signal,
+        onUpdate: () => {},
+        sleep: noWait,
+      });
+      expect(read).toHaveBeenCalledTimes(1);
+      expect(a.commentCount).toBe(1579);
+      expect(a.tasks[0]).toMatchObject({
+        done: true,
+        cursor: null,
+        countMismatch: true,
+      });
+      expect(a.status).toBe("discrepancy");
+    },
+  );
+  it("數量已達 count，但 has_next_page=true 仍繼續下一頁", async () => {
+    const m = memoryStore();
+    const read = vi.fn(async (request) => ({
+      data: {
+        shortcode_media: {
+          edge_media_to_comment: {
+            count: 1,
+            page_info: {
+              has_next_page: !request.cursor,
+              end_cursor: request.cursor ? null : "next",
+            },
+            edges: request.cursor
+              ? []
+              : [
+                  {
+                    node: {
+                      id: "1",
+                      text: "hello",
+                      created_at: 1,
+                      owner: { id: "1", username: "user" },
+                    },
+                  },
+                ],
+          },
+        },
+      },
+    }));
+    const a = await runCapture({
+      activity: activity(),
+      adapter: createInstagramAdapter(read),
+      store: m.store,
+      signal: new AbortController().signal,
+      onUpdate: () => {},
+      sleep: noWait,
+    });
+    expect(read).toHaveBeenCalledTimes(2);
+    expect(read.mock.calls[1][0].cursor).toBe("next");
+    expect(a.status).toBe("complete");
+  });
   it("重新核對找到漏掉的 ID 後正常完成", async () => {
     const m = memoryStore();
     let calls = 0;
